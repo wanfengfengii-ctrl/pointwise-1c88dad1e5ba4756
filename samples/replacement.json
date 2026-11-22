@@ -1,0 +1,29 @@
+{
+  "day": "2026-11-16",
+  "region": "东区",
+  "source_steps": [
+    {"batch_id": "A", "operations": [{"op": "add", "region": "东区", "litres": 3}]},
+    {"batch_id": "B", "operations": [
+      {"op": "check", "region": "东区", "name": "b19", "target": 19},
+      {"op": "add", "region": "东区", "litres": 2}
+    ]},
+    {"batch_id": "ordinary-plus-one", "operations": [{"op": "add", "region": "东区", "litres": 1}]},
+    {"batch_id": "A4", "replaces": "A", "operations": [{"op": "add", "region": "东区", "litres": 4}]},
+    {"batch_id": "A5", "replaces": "A", "operations": [{"op": "add", "region": "东区", "litres": 5}]},
+    {"supplement_id": "b2-start", "litres": 10},
+    {"batch_id": "B2", "replaces": "B", "operations": [
+      {"op": "add", "region": "东区", "litres": 1},
+      {"op": "check", "region": "东区", "name": "b2-21", "target": 21},
+      {"op": "add", "region": "东区", "litres": 1}
+    ]},
+    {"supplement_id": "c-start", "litres": 6},
+    {"batch_id": "C", "operations": [{"op": "check", "region": "东区", "name": "c26", "target": 26}]}
+  ],
+  "review_prefix": [
+    {"supplement_id": "opening-two", "litres": 2, "total_litres": 12},
+    {"acceptance_id": "z-first", "batch_id": "A", "total_litres": 15},
+    {"supplement_id": "between-three", "litres": 3, "total_litres": 18},
+    {"acceptance_id": "a-second", "batch_id": "B", "total_litres": 20},
+    {"supplement_id": "closing-four", "litres": 4, "total_litres": 24}
+  ]
+}

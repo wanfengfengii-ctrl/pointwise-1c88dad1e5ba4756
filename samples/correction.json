@@ -1,0 +1,16 @@
+{
+  "day": "2026-11-16",
+  "batch_id": "daily-correction-20261116",
+  "operations": [
+    {"op": "begin_trial"},
+    {"op": "add", "region": "东区", "litres": 7},
+    {"op": "check", "region": "东区", "name": "trial-17", "target": 17},
+    {"op": "withdraw_trial"},
+    {"op": "add", "region": "东区", "litres": 3},
+    {"op": "check", "region": "东区", "name": "cutoff-20", "target": 20}
+  ],
+  "reviews": [
+    {"acceptance_id": "night-compatible", "supplement_litres": 2},
+    {"acceptance_id": "night-incompatible", "supplement_litres": 7}
+  ]
+}

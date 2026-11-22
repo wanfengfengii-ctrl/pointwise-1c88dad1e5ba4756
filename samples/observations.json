@@ -1,0 +1,14 @@
+{
+  "stations": [
+    {"station_id": "P-E", "region": "东区", "units": ["L", "mL"]},
+    {"station_id": "P-W", "region": "西区", "units": ["L"]}
+  ],
+  "batch_id": "raw-20261116",
+  "source_id": "白班原日报",
+  "rows": [
+    {"reading_id": "east-ml", "station_id": "P-E", "day": "2026-11-16", "unit": "mL", "value": 3000},
+    {"reading_id": "east-l", "station_id": "P-E", "day": "2026-11-16", "unit": "L", "value": 7},
+    {"reading_id": "west-missing", "station_id": "P-W", "day": "2026-11-16", "unit": "L", "value": null},
+    {"reading_id": "west-zero", "station_id": "P-W", "day": "2026-11-16", "unit": "L", "value": 0}
+  ]
+}
