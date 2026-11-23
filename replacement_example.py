@@ -1,3 +1,4 @@
+"""Run the joint source/reviewer replacement sample and print the observed results."""
 import json
 from contextlib import closing
 from pathlib import Path
@@ -7,10 +8,10 @@ from daily.supplements import supplement
 from daily.warehouse import initialize_warehouse, open_warehouse
 from intake.batches import ingest
 from intake.stations import Station
-from issue.freeze import freeze
+from issue.freeze import freeze, freeze_replacement
 from issue.package import encode_package
 from issue.work_batch import correct
-from receive.admission import accept
+from receive.admission import IncompatiblePackage, accept, accept_replacement
 
 
 SAMPLES = Path(__file__).resolve().parent / "samples"
@@ -27,6 +28,24 @@ def seed(db, observations):
     ingest(db, observations["batch_id"], observations["source_id"], observations["rows"])
 
 
+def issue_all(observations, scenario, source_path=":memory:"):
+    day, region = scenario["day"], scenario["region"]
+    wires, replacements = {}, {}
+    with closing(open_warehouse(source_path)) as source:
+        seed(source, observations)
+        for step in scenario["source_steps"]:
+            if "supplement_id" in step:
+                supplement(source, step["supplement_id"], day, region, step["litres"])
+                continue
+            batch_id = step["batch_id"]
+            correct(source, batch_id, day, step["operations"])
+            if "replaces" in step:
+                replacements[batch_id] = freeze_replacement(source, step["replaces"], batch_id)
+            else:
+                wires[batch_id] = encode_package(freeze(source, batch_id))
+    return wires, replacements
+
+
 def require_total(label, actual, expected):
     if actual != expected:
         raise AssertionError(f"{label}: expected {expected} L, got {actual} L")
@@ -34,41 +53,52 @@ def require_total(label, actual, expected):
 
 def run_example(observations, scenario):
     day, region = scenario["day"], scenario["region"]
-    wires = {}
-    prefix_batches = {step["batch_id"] for step in scenario["review_prefix"] if "batch_id" in step}
-    with closing(open_warehouse(":memory:")) as source:
-        seed(source, observations)
-        for step in scenario["source_steps"]:
-            batch_id = step.get("batch_id")
-            if batch_id in prefix_batches or batch_id == "ordinary-plus-one":
-                correct(source, batch_id, day, step["operations"])
-                wires[batch_id] = encode_package(freeze(source, batch_id))
+    wires, replacements = issue_all(observations, scenario)
 
-    receipts = []
+    result = {"prefix": [], "refusals": [], "live_after_validity": None,
+              "new_receipts": [], "historical": {}, "regrant": None}
     with closing(open_warehouse(":memory:")) as reviewer:
         seed(reviewer, observations)
         for step in scenario["review_prefix"]:
             if "supplement_id" in step:
-                label = step["supplement_id"]
-                supplement(reviewer, label, day, region, step["litres"])
+                supplement(reviewer, step["supplement_id"], day, region, step["litres"])
             else:
-                label = step["acceptance_id"]
-                receipt = accept(reviewer, label, wires[step["batch_id"]])
-                receipts.append((receipt.receipt_number, step["total_litres"]))
-            require_total(label, read(reviewer, day=day).total_litres, step["total_litres"])
+                accept(reviewer, step["acceptance_id"], wires[step["batch_id"]])
+            require_total(step.get("supplement_id") or step.get("acceptance_id"),
+                          read(reviewer, day=day).total_litres, step["total_litres"])
+            result["prefix"].append({"step": step.get("supplement_id") or step.get("acceptance_id"),
+                                     "total_litres": step["total_litres"]})
 
-        before = read(reviewer, day=day).total_litres
-        accept(reviewer, "ordinary-extra", wires["ordinary-plus-one"])
-        after = read(reviewer, day=day).total_litres
-        require_total("ordinary-extra", after, 25)
-        historical = {}
-        for receipt_number, expected in receipts:
-            total = read(reviewer, receipt_number=receipt_number).total_litres
-            require_total(receipt_number, total, expected)
-            historical[receipt_number] = total
-    return {"v1_before_extra": before, "v1_after_ordinary_extra": after, "original_receipts": historical}
+        before = read(reviewer, day=day)
+        try:
+            accept_replacement(reviewer, "a4", "RC-z-first", replacements["A4"])
+        except IncompatiblePackage:
+            result["refusals"].append({"acceptance_id": "a4",
+                                       "after_total_litres": read(reviewer, day=day).total_litres})
+        else:
+            raise AssertionError("a4 should have been refused")
+        require_total("after-a4", read(reviewer, day=day).total_litres, before.total_litres)
+
+        a5 = accept_replacement(reviewer, "a5", "RC-z-first", replacements["A5"])
+        result["new_receipts"].append({"receipt_number": a5.receipt_number,
+                                       "source_batch": a5.source_batch,
+                                       "package_id": a5.package_id,
+                                       "total_litres": read(reviewer, day=day).total_litres})
+        accept(reviewer, "m-third", wires["C"])
+        require_total("m-third", read(reviewer, day=day).total_litres, 26)
+
+        b2 = accept_replacement(reviewer, "b2", "RC-a-second", replacements["B2"])
+        result["new_receipts"].append({"receipt_number": b2.receipt_number,
+                                       "source_batch": b2.source_batch,
+                                       "package_id": b2.package_id,
+                                       "total_litres": read(reviewer, day=day).total_litres})
+        result["live_after_validity"] = read(reviewer, day=day).total_litres
+        for number in ("RC-z-first", "RC-a-second"):
+            result["historical"][number] = read(reviewer, receipt_number=number).total_litres
+        result["regrant"] = accept_replacement(reviewer, "b2", "RC-a-second", replacements["B2"]).receipt_number
+    return result
 
 
 if __name__ == "__main__":
-    result = run_example(load_sample("observations.json"), load_sample("replacement.json"))
-    print(json.dumps(result, sort_keys=True))
+    print(json.dumps(run_example(load_sample("observations.json"), load_sample("replacement.json")),
+                     ensure_ascii=False, sort_keys=True))

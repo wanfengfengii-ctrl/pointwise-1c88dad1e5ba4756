@@ -55,6 +55,8 @@ def supplement(db: sqlite3.Connection, supplement_id: str, day: str, region: str
             db.execute('''
                 INSERT INTO supplements (supplement_id, day, region, delta) VALUES (?, ?, ?, ?)
             ''', (item.supplement_id, item.day, item.region, str(item.delta)))
+            from receive.program import record_supplement
+            record_supplement(db, item.day, item.supplement_id)
             return item
     except ValueError as error:
         raise SupplementError(str(error)) from error

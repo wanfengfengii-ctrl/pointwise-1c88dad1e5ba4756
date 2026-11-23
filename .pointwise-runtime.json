@@ -3,5 +3,5 @@
   "kind": "cli",
   "setup": [],
   "verify": ["python3", "-B", "check_project.py"],
-  "demo": ["python3", "-B", "-m", "daily.warehouse", "demo", "samples/observations.json", "samples/correction.json"]
+  "demo": ["python3", "-B", "-m", "daily.warehouse", "replacement-demo", "samples/observations.json", "samples/replacement.json"]
 }

@@ -63,6 +63,9 @@ def ingest(
                 (batch_id, source_id, content),
             )
             append_observations(db, readings)
+            from receive.program import record_observation_batch
+            for day in sorted({reading.day for reading in readings}):
+                record_observation_batch(db, day, batch_id)
             return SourceBatch(batch_id, source_id, content)
     except (TypeError, ValueError) as error:
         raise IngestError(str(error)) from error

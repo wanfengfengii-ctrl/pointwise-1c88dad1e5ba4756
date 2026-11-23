@@ -17,6 +17,7 @@ from intake.stations import Station, initialize_stations, register
 from issue.freeze import initialize_frozen_packages
 from issue.work_batch import initialize_work_batches
 from receive.posting import initialize_postings
+from receive.program import initialize_programs
 from receive.receipts import initialize_receipts
 from receive.transaction import write_transaction
 
@@ -42,6 +43,7 @@ def initialize_warehouse(db: sqlite3.Connection, stations: Iterable[Station] = (
         initialize_frozen_packages(db)
         initialize_receipts(db)
         initialize_postings(db)
+        initialize_programs(db)
         initialize_audit_views(db)
         for station in stations:
             register(db, station.station_id, station.region, station.units)
@@ -135,14 +137,58 @@ def _run_demo(observations: dict, correction: dict) -> int:
     return 0
 
 
+def _run_replacement_demo(observations: dict, scenario: dict) -> int:
+    from replacement_example import run_example
+
+    result = run_example(observations, scenario)
+    expected = {
+        'prefix': [
+            {'step': 'opening-two', 'total_litres': 12},
+            {'step': 'z-first', 'total_litres': 15},
+            {'step': 'between-three', 'total_litres': 18},
+            {'step': 'a-second', 'total_litres': 20},
+            {'step': 'closing-four', 'total_litres': 24},
+        ],
+        'refusals': [{'acceptance_id': 'a4', 'after_total_litres': 24}],
+        'live_after_validity': 26,
+        'historical': {'RC-z-first': 15, 'RC-a-second': 20},
+        'regrant': 'RC-b2',
+    }
+    receipts = {item['receipt_number']: item['total_litres'] for item in result['new_receipts']}
+    actual = {
+        'prefix': result['prefix'],
+        'refusals': result['refusals'],
+        'live_after_validity': result['live_after_validity'],
+        'historical': result['historical'],
+        'regrant': result['regrant'],
+    }
+    record = {
+        'input': {'day': scenario['day'], 'review_prefix': scenario['review_prefix'],
+                  'source_steps': scenario['source_steps']},
+        'expected': {**expected, 'new_receipts': {'RC-a5': 26, 'RC-b2': 26}},
+        'actual': {**actual, 'new_receipts': receipts},
+        'code_paths': ['issue/freeze.py', 'issue/package.py', 'receive/admission.py',
+                       'receive/program.py', 'audit/ledger.py'],
+        'oracle': ('A4 +4 L 使 B 的“等于 19”由假变真，拒绝；A5 +5 L 使现账 24→26。'
+                   'B2 仅在原位 +2 L，C 的核对仍为真，旧首执分别固定为 15 L 与 20 L。'),
+    }
+    if actual != expected or receipts != {'RC-a5': 26, 'RC-b2': 26}:
+        print('REPLACEMENT_DEMO_DIVERGENCE ' + json.dumps(record, ensure_ascii=False), file=sys.stderr)
+        return 1
+    print('POINTWISE_SCENARIO ' + json.dumps(record, ensure_ascii=False))
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description='运行澄浦监测仓的固定交班样例')
-    parser.add_argument('command', choices=('demo',))
+    parser.add_argument('command', choices=('demo', 'replacement-demo'))
     parser.add_argument('observations', type=Path)
     parser.add_argument('correction', type=Path)
     args = parser.parse_args(argv)
     observations = json.loads(args.observations.read_text(encoding='utf-8'))
     correction = json.loads(args.correction.read_text(encoding='utf-8'))
+    if args.command == 'replacement-demo':
+        return _run_replacement_demo(observations, correction)
     return _run_demo(observations, correction)
 
 

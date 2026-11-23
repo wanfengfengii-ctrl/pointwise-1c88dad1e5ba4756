@@ -9,7 +9,10 @@
 ```sh
 python3 -B check_project.py
 python3 -B -m daily.warehouse demo samples/observations.json samples/correction.json
+python3 -B -m daily.warehouse replacement-demo samples/observations.json samples/replacement.json
 ```
+
+`check_project.py` 运行全部从 V1 到原位替换的回归，并对独立源仓与复核仓做联合核验（断源重开、旧日兼容、拒收、提交失败与同号复领）。`replacement-demo` 用实办结果读取旧首执、拒绝后的现账及重开后可领的新账。
 
 演示在临时目录建立独立的源仓和复核仓，使用固定日期 2026-11-16。东区原报 3000 mL 和 7 L，合计 10 L。西区一条缺读、一条有效零值。源端撤回一次试算，正式加 3 L，并观察东区是否等于 20 L，结果为假。源仓关闭后，同一冻结件在东区已有 12 L 的仓入账为 15 L，在已有 17 L 的仓拒收。演示重开两个复核仓，检查实时账及首执后输出实测结果。
 
@@ -26,8 +29,10 @@ python3 -B -m daily.warehouse demo samples/observations.json samples/correction.
 | `daily.supplements.supplement(db, supplement_id, day, region, litres)` | 具名本地补录，增减使用有符号整数升。同号同参重用。同号异参或未知日区引发 `SupplementError`。 |
 | `issue.work_batch.correct(db, batch_id, day, operations)` | 建立或继续一批更正，返回持久的 `WorkBatch`。批名固定起始日账的日期、日区范围与量。非法操作或继续编辑已封存批引发 `CorrectionError`。 |
 | `issue.freeze.freeze(db, batch_id)` | 封存并返回 `FrozenPackage`，用 `issue.package.encode_package` 得到交换字节。已发行的工作批可重复领取，未知批或未结束的试算引发 `FreezeError`。 |
-| `receive.admission.accept(db, acceptance_id, wire)` | 接纳指定冻结字节并返回 `Receipt`。重投沿用接纳号。同号同件直接返回原首执。无效来件、同号异件、未知日区或提交错误引发 `AdmissionError`，核对变化为其子类 `IncompatiblePackage`，实际提交失败为其子类 `CommitError`。 |
-| `audit.ledger.read(db, day=...)` 或 `audit.ledger.read(db, receipt_number=...)` | 读取 `AuditView`，包含按日区排序的 `regions` 与 `total_litres`。未建立仓账或未知首执返回 `None`。 |
+| `receive.admission.accept(db, acceptance_id, wire)` | 接纳指定冻结字节并返回 `Receipt`。重投沿用接纳号。同号同件直接返回原首执。无效来件、同号异件、未知日区或提交错误引发 `AdmissionError`，核对变化为其子类 `IncompatiblePackage`，实际提交失败为其子类 `CommitError`。普通接纳拒收替换件。 |
+| `issue.freeze.freeze_replacement(db, original_batch_id, replacement_batch_id)` | 将同日工作批封定为某普通冻结件的替换件并返回交换字节。同绑重领、重开返回原字节，换绑、缺批、异日、原批无普通件、试算未结束或与普通发行混用引发 `FreezeError`。 |
+| `receive.admission.accept_replacement(db, acceptance_id, target_receipt_number, wire)` | 把替换件放回指定普通首执的入账位置并返回新 `Receipt`。同一普通首执最多成功替换一次，替换首执不可作目标，普通接纳与替换接纳共用接纳号。核对翻转引发 `IncompatiblePackage`，提交失败引发 `CommitError`，其余无资格、缺证、坏件引发 `AdmissionError`。 |
+| `audit.ledger.read(db, day=...)` 或 `audit.ledger.read(db, receipt_number=...)` | 读取 `AuditView`，包含按日区排序的 `regions` 与 `total_litres`。未建立仓账或未知首执返回 `None`。旧首执视图始终固定。 |
 
 日期使用 `YYYY-MM-DD`。读数的 `value` 为整数或明确的 `None`。整数 mL 必须能精确换成整数升。有效零量仍有出处并计作有效读数。缺读有独立出处，且仅增加缺读数。登记区在当日无贡献时按零参与工作账和接纳计算。当前账表列出有贡献的区。成功发布也可建立一个日期的日账。
 
